@@ -3,7 +3,8 @@ from django.contrib.gis.geos import GEOSGeometry
 from django.core import validators
 from django.utils.encoding import smart_str
 from django.utils.translation import ugettext_lazy as _
-
+from numbers import Number
+import sys
 from rest_framework import serializers
 
 EMPTY_VALUES = (None, '', [], (), {})
@@ -34,26 +35,35 @@ class PointField(serializers.Field):
             return None
 
         value_type = type(value)
-        if value_type is str or value_type is unicode:
-            try:
-                value = value.replace("'", '"')
-                value = json.loads(value)
-            except ValueError:
-                msg = self.error_messages['invalid']
-                raise serializers.ValidationError(msg)
+        if sys.version_info.major == 3:
+            if value_type is str:
+                try:
+                    value = value.replace("'", '"')
+                    value = json.loads(value)
+                except ValueError:
+                    msg = self.error_messages['invalid']
+                    raise serializers.ValidationError(msg)
+        else:
+            if value_type is str or value_type is unicode:
+                try:
+                    value = value.replace("'", '"')
+                    value = json.loads(value)
+                except ValueError:
+                    msg = self.error_messages['invalid']
+                    raise serializers.ValidationError(msg)
 
         if value and type(value) is dict:
             latitude = value.get("latitude")
             longitude = value.get("longitude")
-            if latitude and longitude:
+            if latitude and longitude and isinstance(latitude, Number) and isinstance(longitude, Number):
                 point_object = GEOSGeometry('POINT(%(longitude)s %(latitude)s)' % {
                     "longitude": longitude,
                     "latitude": latitude,
                 })
                 return point_object
-        else:
-            msg = self.error_messages['invalid']
-            raise serializers.ValidationError(msg)
+
+        msg = self.error_messages['invalid']
+        raise serializers.ValidationError(msg)
 
     def to_representation(self, value):
         """
